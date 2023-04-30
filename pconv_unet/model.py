@@ -1,5 +1,5 @@
-""" Based on "https://github.com/MathiasGruber/PConv-Keras"
-"""
+""" Based on https://github.com/MathiasGruber/PConv-Keras """
+
 import os
 from datetime import datetime
 
@@ -15,7 +15,7 @@ from layers import PConv2D
 
 class PConvUnet(object):
 
-    def __init__(self, img_rows=512, img_cols=512, vgg_weights="/Users/insoochung/Downloads/pytorch_to_keras_vgg16.h5", inference_only=False, net_name='default', gpus=1, vgg_device=None):
+    def __init__(self, img_rows=512, img_cols=512, vgg_weights=f"{os.path.dirname(__file__)}/assets/pytorch_to_keras_vgg16.h5", inference_only=False, net_name='default', gpus=1, vgg_device=None):
         """Create the PConvUnet. If variable image size, set img_rows and img_cols to None
 
         Args:

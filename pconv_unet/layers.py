@@ -1,3 +1,5 @@
+""" Based on https://github.com/MathiasGruber/PConv-Keras """
+
 import tensorflow as tf
 from keras.utils import conv_utils
 from keras import backend as K
