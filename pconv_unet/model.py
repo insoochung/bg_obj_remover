@@ -3,12 +3,8 @@
 import os
 from datetime import datetime
 
+import numpy as np
 import tensorflow as tf
-from keras.models import Model
-from keras.optimizers import Adam
-from keras.layers import Input, Conv2D, UpSampling2D, LeakyReLU, BatchNormalization, Activation, Lambda
-from keras.applications import VGG16
-from keras import backend as K
 
 from layers import PConv2D
 
@@ -73,42 +69,39 @@ class PConvUnet(object):
 
     def build_vgg(self, weights="imagenet"):
         """
-        Load pre-trained VGG16 from keras applications
+        Load pre-trained tf.keras.applications.vgg16.VGG16 from keras applications
         Extract features to be used in loss function from last conv layer, see architecture at:
         https://github.com/keras-team/keras/blob/master/keras/applications/vgg16.py
         """
 
-        # Input image to extract features from
-        img = Input(shape=(self.img_rows, self.img_cols, 3))
+        # tf.keras.Input image to extract features from
+        img = tf.keras.Input(shape=(self.img_rows, self.img_cols, 3))
 
-        # Mean center and rescale by variance as in PyTorch
-
-        # processed = tf.keras.layers.Normalization(
-        #     axis=-1, mean=self.mean, variance=[std*std for std in self.std])(img)
-        processed = Lambda(lambda x: (x-self.mean) / self.std)(img)
+        # TODO: fix this, or make sure that this doesn't cause any problem.
+        # TODO: Mean center and rescale by variance as in PyTorch
+        # processed = Lambda(lambda x: (x-self.mean) / self.std)
 
         # If inference only, just return empty model
         if self.inference_only:
-            model = Model(inputs=img, outputs=[
-                          img for _ in range(len(self.vgg_layers))])
+            img = tf.keras.Input(shape=(self.img_rows, self.img_cols, 3))
+            model = tf.keras.Model(inputs=img, outputs=[
+                img for _ in range(len(self.vgg_layers))])
             model.trainable = False
             model.compile(loss='mse', optimizer='adam')
             return model
 
-        # Get the vgg network from Keras applications
+        # Get the vgg network from applications
         if weights in ['imagenet', None]:
-            vgg = VGG16(weights=weights, include_top=False)
+            vgg = tf.keras.applications.vgg16.VGG16(
+                weights=weights, include_top=False)
         else:
-            vgg = VGG16(weights=None, include_top=False)
+            vgg = tf.keras.applications.vgg16.VGG16(
+                weights=None, include_top=False)
             vgg.load_weights(weights, by_name=True)
 
-        # Output the first three pooling layers
-        # vgg.outputs = [vgg.layers[i].output for i in self.vgg_layers]
-        # Create model and compile
-        # print(vgg.summary())
-        # _model = vgg(processed)
-        # assert 0, vgg.get_layer("block1_pool")
-        model = Model(inputs=img, outputs=vgg(processed))
+        model = tf.keras.Model(inputs=vgg.inputs, outputs=[
+            vgg.layers[i].output for i in self.vgg_layers])
+
         model.trainable = False
         model.compile(loss='mse', optimizer='adam')
 
@@ -117,9 +110,9 @@ class PConvUnet(object):
     def build_pconv_unet(self, train_bn=True):
 
         # INPUTS
-        inputs_img = Input(
+        inputs_img = tf.keras.Input(
             (self.img_rows, self.img_cols, 3), name='inputs_img')
-        inputs_mask = Input(
+        inputs_mask = tf.keras.Input(
             (self.img_rows, self.img_cols, 3), name='inputs_mask')
 
         # ENCODER
@@ -127,9 +120,9 @@ class PConvUnet(object):
             conv, mask = PConv2D(filters, kernel_size,
                                  strides=2, padding='same')([img_in, mask_in])
             if bn:
-                conv = BatchNormalization(
+                conv = tf.keras.layers.BatchNormalization(
                     name='EncBN'+str(encoder_layer.counter))(conv, training=train_bn)
-            conv = Activation('relu')(conv)
+            conv = tf.keras.layers.Activation('relu')(conv)
             encoder_layer.counter += 1
             return conv, mask
         encoder_layer.counter = 0
@@ -146,16 +139,16 @@ class PConvUnet(object):
 
         # DECODER
         def decoder_layer(img_in, mask_in, e_conv, e_mask, filters, kernel_size, bn=True):
-            up_img = UpSampling2D(size=(2, 2))(img_in)
-            up_mask = UpSampling2D(size=(2, 2))(mask_in)
+            up_img = tf.keras.layers.UpSampling2D(size=(2, 2))(img_in)
+            up_mask = tf.keras.layers.UpSampling2D(size=(2, 2))(mask_in)
             concat_img = tf.keras.layers.Concatenate(axis=3)([e_conv, up_img])
             concat_mask = tf.keras.layers.Concatenate(
                 axis=3)([e_mask, up_mask])
             conv, mask = PConv2D(filters, kernel_size, padding='same')(
                 [concat_img, concat_mask])
             if bn:
-                conv = BatchNormalization()(conv)
-            conv = LeakyReLU(alpha=0.2)(conv)
+                conv = tf.keras.layers.BatchNormalization()(conv)
+            conv = tf.keras.layers.LeakyReLU(alpha=0.2)(conv)
             return conv, mask
 
         d_conv9, d_mask9 = decoder_layer(
@@ -174,17 +167,18 @@ class PConvUnet(object):
             d_conv14, d_mask14, e_conv1, e_mask1, 64, 3)
         d_conv16, d_mask16 = decoder_layer(
             d_conv15, d_mask15, inputs_img, inputs_mask, 3, 3, bn=False)
-        outputs = Conv2D(3, 1, activation='sigmoid',
-                         name='outputs_img')(d_conv16)
+        outputs = tf.keras.layers.Conv2D(3, 1, activation='sigmoid',
+                                         name='outputs_img')(d_conv16)
 
         # Setup the model inputs / outputs
-        model = Model(inputs=[inputs_img, inputs_mask], outputs=outputs)
+        model = tf.keras.Model(
+            inputs=[inputs_img, inputs_mask], outputs=outputs)
 
         return model, inputs_mask
 
     def compile_pconv_unet(self, model, inputs_mask, lr=0.0002):
         model.compile(
-            optimizer=Adam(lr=lr),
+            optimizer=tf.keras.optimizers.Adam(lr=lr),
             loss=self.loss_total(inputs_mask),
             metrics=[self.PSNR]
         )
@@ -232,7 +226,7 @@ class PConvUnet(object):
         return self.l1(mask * y_true, mask * y_pred)
 
     def loss_perceptual(self, vgg_out, vgg_gt, vgg_comp):
-        """Perceptual loss based on VGG16, see. eq. 3 in paper"""
+        """Perceptual loss based on tf.keras.applications.vgg16.VGG16, see. eq. 3 in paper"""
         loss = 0
         for o, c, g in zip(vgg_out, vgg_comp, vgg_gt):
             loss += self.l1(o, g) + self.l1(c, g)
@@ -249,12 +243,14 @@ class PConvUnet(object):
         """Total variation loss, used for smoothing the hole region, see. eq. 6"""
 
         # Create dilated hole region using a 3x3 kernel of all 1s.
-        kernel = K.ones(shape=(3, 3, mask.shape[3], mask.shape[3]))
-        dilated_mask = K.conv2d(
+        kernel = tf.keras.backend.ones(
+            shape=(3, 3, mask.shape[3], mask.shape[3]))
+        dilated_mask = tf.keras.backend.conv2d(
             1-mask, kernel, data_format='channels_last', padding='same')
 
         # Cast values to be [0., 1.], and compute dilated hole region of y_comp
-        dilated_mask = K.cast(K.greater(dilated_mask, 0), 'float32')
+        dilated_mask = tf.keras.backend.cast(
+            tf.keras.backend.greater(dilated_mask, 0), 'float32')
         P = dilated_mask * y_comp
 
         # Calculate total variation loss
@@ -300,8 +296,7 @@ class PConvUnet(object):
         Our input is scaled with be within the range -2.11 to 2.64 (imagenet value scaling). We use the difference between these
         two values (4.75) as MAX_I        
         """
-        # return 20 * K.log(4.75) / K.log(10.0) - 10.0 * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.0)
-        return - 10.0 * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.0)
+        return - 10.0 * tf.keras.backend.log(tf.keras.backend.mean(tf.keras.backend.square(y_pred - y_true))) / tf.keras.backend.log(10.0)
 
     @staticmethod
     def current_timestamp():
@@ -310,10 +305,10 @@ class PConvUnet(object):
     @staticmethod
     def l1(y_true, y_pred):
         """Calculate the L1 loss used in all loss calculations"""
-        if K.ndim(y_true) == 4:
-            return K.mean(K.abs(y_pred - y_true), axis=[1, 2, 3])
-        elif K.ndim(y_true) == 3:
-            return K.mean(K.abs(y_pred - y_true), axis=[1, 2])
+        if tf.keras.backend.ndim(y_true) == 4:
+            return tf.keras.backend.mean(tf.keras.backend.abs(y_pred - y_true), axis=[1, 2, 3])
+        elif tf.keras.backend.ndim(y_true) == 3:
+            return tf.keras.backend.mean(tf.keras.backend.abs(y_pred - y_true), axis=[1, 2])
         else:
             raise NotImplementedError(
                 "Calculating L1 loss on 1D tensors? should not occur for this network")
@@ -323,21 +318,23 @@ class PConvUnet(object):
         """Calculate gram matrix used in style loss"""
 
         # Assertions on input
-        assert K.ndim(
-            x) == 4, 'Input tensor should be a 4d (B, H, W, C) tensor'
-        assert K.image_data_format() == 'channels_last', "Please use channels-last format"
+        assert tf.keras.backend.ndim(
+            x) == 4, 'tf.keras.Input tensor should be a 4d (B, H, W, C) tensor'
+        assert tf.keras.backend.image_data_format(
+        ) == 'channels_last', "Please use channels-last format"
 
         # Permute channels and get resulting shape
-        x = K.permute_dimensions(x, (0, 3, 1, 2))
-        shape = K.shape(x)
+        x = tf.keras.backend.permute_dimensions(x, (0, 3, 1, 2))
+        shape = tf.keras.backend.shape(x)
         B, C, H, W = shape[0], shape[1], shape[2], shape[3]
 
         # Reshape x and do batch dot product
-        features = K.reshape(x, K.stack([B, C, H*W]))
-        gram = K.batch_dot(features, features, axes=2)
+        features = tf.keras.backend.reshape(
+            x, tf.keras.backend.stack([B, C, H*W]))
+        gram = tf.keras.backend.batch_dot(features, features, axes=2)
 
         # Normalize with channels, height and width
-        gram = gram / K.cast(C * H * W, x.dtype)
+        gram = gram / tf.keras.backend.cast(C * H * W, x.dtype)
 
         return gram
 
@@ -348,6 +345,12 @@ class PConvUnet(object):
         return self.model.predict(sample, **kwargs)
 
 
+def generator():
+    while True:
+        yield (np.random.uniform(0, 1, size=(2, 512, 512, 3)), np.zeros((2, 512, 512, 3))), np.random.uniform(0, 1, size=(2, 512, 512, 3))
+
+
 if __name__ == "__main__":
     model = PConvUnet()
-    print(model.summary())
+    model.summary()
+    model.fit_generator(generator())

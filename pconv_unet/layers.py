@@ -2,11 +2,9 @@
 
 import tensorflow as tf
 from keras.utils import conv_utils
-from keras import backend as K
-from keras.layers import Conv2D
 
 
-class PConv2D(Conv2D):
+class PConv2D(tf.keras.layers.Conv2D):
     def __init__(self, *args, n_channels=3, mono=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_spec = [tf.keras.layers.InputSpec(
@@ -36,7 +34,7 @@ class PConv2D(Conv2D):
                                       regularizer=self.kernel_regularizer,
                                       constraint=self.kernel_constraint)
         # Mask kernel
-        self.kernel_mask = K.ones(
+        self.kernel_mask = tf.keras.backend.ones(
             shape=self.kernel_size + (self.input_dim, self.filters))
 
         # Calculate padding size to achieve zero-padding
@@ -73,13 +71,13 @@ class PConv2D(Conv2D):
                 'PartialConvolution2D must be called on a list of two tensors [img, mask]. Instead got: ' + str(inputs))
 
         # Padding done explicitly so that padding becomes part of the masked partial convolution
-        images = K.spatial_2d_padding(
+        images = tf.keras.backend.spatial_2d_padding(
             inputs[0], self.pconv_padding, self.data_format)
-        masks = K.spatial_2d_padding(
+        masks = tf.keras.backend.spatial_2d_padding(
             inputs[1], self.pconv_padding, self.data_format)
 
         # Apply convolutions to mask
-        mask_output = K.conv2d(
+        mask_output = tf.keras.backend.conv2d(
             masks, self.kernel_mask,
             strides=self.strides,
             padding='valid',
@@ -88,7 +86,7 @@ class PConv2D(Conv2D):
         )
 
         # Apply convolutions to image
-        img_output = K.conv2d(
+        img_output = tf.keras.backend.conv2d(
             (images*masks), self.kernel,
             strides=self.strides,
             padding='valid',
@@ -100,7 +98,7 @@ class PConv2D(Conv2D):
         mask_ratio = self.window_size / (mask_output + 1e-8)
 
         # Clip output to be between 0 and 1
-        mask_output = K.clip(mask_output, 0, 1)
+        mask_output = tf.keras.backend.clip(mask_output, 0, 1)
 
         # Remove ratio values where there are holes
         mask_ratio = mask_ratio * mask_output
@@ -110,7 +108,7 @@ class PConv2D(Conv2D):
 
         # Apply bias only to the image (if chosen to do so)
         if self.use_bias:
-            img_output = K.bias_add(
+            img_output = tf.keras.backend.bias_add(
                 img_output,
                 self.bias,
                 data_format=self.data_format)
