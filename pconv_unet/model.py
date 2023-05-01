@@ -7,8 +7,10 @@ import tensorflow as tf
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.layers import Input, Conv2D, UpSampling2D, LeakyReLU, BatchNormalization, Activation, Lambda
+from keras.layers.merge import Concatenate
 from keras.applications import VGG16
 from keras import backend as K
+from keras.utils.multi_gpu_utils import multi_gpu_model
 
 from layers import PConv2D
 
@@ -67,7 +69,7 @@ class PConvUnet(object):
         else:
             with tf.device("/cpu:0"):
                 self.model, inputs_mask = self.build_pconv_unet()
-            self.model = tf.keras.utils.multi_gpu_model(
+            self.model = multi_gpu_model(
                 self.model, gpus=self.gpus)
             self.compile_pconv_unet(self.model, inputs_mask)
 
@@ -103,7 +105,7 @@ class PConvUnet(object):
             vgg.load_weights(weights, by_name=True)
 
         # Output the first three pooling layers
-        # vgg.outputs = [vgg.layers[i].output for i in self.vgg_layers]
+        vgg.outputs = [vgg.layers[i].output for i in self.vgg_layers]
         # Create model and compile
         # print(vgg.summary())
         # _model = vgg(processed)
@@ -148,8 +150,8 @@ class PConvUnet(object):
         def decoder_layer(img_in, mask_in, e_conv, e_mask, filters, kernel_size, bn=True):
             up_img = UpSampling2D(size=(2, 2))(img_in)
             up_mask = UpSampling2D(size=(2, 2))(mask_in)
-            concat_img = tf.keras.layers.Concatenate(axis=3)([e_conv, up_img])
-            concat_mask = tf.keras.layers.Concatenate(
+            concat_img = Concatenate(axis=3)([e_conv, up_img])
+            concat_mask = Concatenate(
                 axis=3)([e_mask, up_mask])
             conv, mask = PConv2D(filters, kernel_size, padding='same')(
                 [concat_img, concat_mask])
@@ -350,4 +352,4 @@ class PConvUnet(object):
 
 if __name__ == "__main__":
     model = PConvUnet()
-    print(model.summary())
+    model.summary()
