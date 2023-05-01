@@ -60,7 +60,7 @@ def forward(model, masked, mask):
     return gen_output, comp, gen_losses, losses_dict
 
 
-def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, train_steps=100000, valid_steps=1000, plot_interval=100, image_size=512):
+def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, train_steps=100000, valid_steps=1000, plot_interval=100, image_size=256):
     os.makedirs(train_dir, exist_ok=True)
     mask_gen = MaskGenerator(image_size, image_size)
     for e in range(start_epoch, epochs):
@@ -104,7 +104,7 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
 
 
 if __name__ == "__main__":
-    image_size = 512
+    image_size = 256
     batch_size = 1
     assets_dir = f"{os.path.dirname(__file__)}/assets"
     model_ckpt = f"{assets_dir}/pytorch_to_keras_vgg16.h5"
@@ -119,7 +119,7 @@ if __name__ == "__main__":
                            batch_size, training=True)
     valid_ds = get_dataset(valid_filepaths, image_size,
                            batch_size, training=False)
-    model = PConvUnet(model_ckpt)
+    model = PConvUnet(model_ckpt, image_size=image_size)
 
     previous_ckpt = None
     start_epoch = 0
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         train_steps=1,
         valid_steps=1,
         plot_interval=1,
-        image_size=512
+        image_size=256
     )
 
     # # Full-on training
@@ -152,5 +152,5 @@ if __name__ == "__main__":
     #     train_steps=10000,
     #     valid_steps=100,
     #     plot_interval=20,
-    #     image_size=512
+    #     image_size=256
     # )
