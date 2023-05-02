@@ -20,9 +20,7 @@ def generate_mask(batch_size, generator_obj):
 
 def get_masked(batch, generator_obj):
     masks = generate_mask(batch.shape[0], generator_obj).astype("float32")
-    masked = batch * masks
-    masked += -(masks - 1)
-    return (masked, masks), batch
+    return masks, batch
 
 
 def plot_example(inp, tar, gen, comp, train_dir, epoch, step):
@@ -46,16 +44,16 @@ def plot_example(inp, tar, gen, comp, train_dir, epoch, step):
     plt.savefig(f"{plot_dir}/e{epoch}_s{step}.png")
 
 
-def forward(model, masked, mask):
-    gen_output = model.pconv_unet([masked, mask])
-    comp = masked * mask + (1 - mask) * gen_output
+def forward(model, target, mask):
+    gen_output = model.pconv_unet([target, mask])
+    comp = target * mask + (1 - mask) * gen_output
 
-    vgg_real = model.vgg(masked)
+    vgg_real = model.vgg(target)
     vgg_gen = model.vgg(gen_output)
     vgg_comp = model.vgg(comp)
 
     gen_losses, losses_dict = model.gen_loss(
-        vgg_real, vgg_gen, vgg_comp, masked, gen_output, mask)
+        vgg_real, vgg_gen, vgg_comp, target, gen_output, mask)
 
     return gen_output, comp, gen_losses, losses_dict
 
@@ -69,10 +67,10 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
         print(f"Epoch {e} - training")
         for i in tqdm(range(train_steps)):
             batch = next(train_iter)
-            (masked, mask), _ = get_masked(batch, mask_gen)
+            mask, target = get_masked(batch, mask_gen)
             with tf.GradientTape() as gen_tape:
                 gen_output, comp, gen_losses, losses_dict = forward(
-                    model, masked, mask)
+                    model, target, mask)
                 train_losses.append(losses_dict["total"])
 
                 for k in losses_dict.keys():
@@ -90,12 +88,12 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
         print(f"Epoch {e} - validation")
         for i in tqdm(range(valid_steps)):
             batch = next(valid_iter)
-            (masked, mask), _ = get_masked(batch, mask_gen)
+            mask, target = get_masked(batch, mask_gen)
             gen_output, comp, gen_losses, losses_dict = forward(
-                model, masked, mask)
+                model, target, mask)
             valid_losses.append(losses_dict["total"])
             if plot_interval and i % plot_interval == 0:
-                plot_example(masked[0] * mask[0], masked[0],
+                plot_example(target[0] * mask[0], target[0],
                              gen_output[0], comp[0], train_dir, e, i)
         model.save_model(
             os.path.join(
