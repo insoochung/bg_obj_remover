@@ -23,45 +23,6 @@ class PConvUnet():
         self.vgg = self.build_vgg(vgg_path)
         self.vgg.build(input_shape=(None, image_size, image_size, 3))
 
-    # main training loop, if needed, it will also periodically show examples of outputs.
-    def train(self, epochs=1, plot_progress=False, plot_interval=10):
-        for e in range(epochs):
-            # self.load_data()
-            for i in range(self.cache_size):
-                if i > 0:
-                    print("[%d][%d/%d] Loss %f" % (e, i, self.cache_size,
-                          self.losses['total'][-1]), end="\r")
-                else:
-                    print("[%d][%d/%d]" % (e, i, self.cache_size), end="\r")
-
-                x, y = self.get_batch()
-                with tf.GradientTape() as gen_tape:
-                    gen_output = self.pconv_unet([x, y])
-                    comp = x * y + (1 - y) * gen_output
-
-                    vgg_real = self.vgg(x)
-                    vgg_gen = self.vgg(gen_output)
-                    vgg_comp = self.vgg(comp)
-
-                    gen_losses, losses_dict = self.gen_loss(
-                        vgg_real, vgg_gen, vgg_comp, x, gen_output, y)
-
-                    for k in losses_dict.keys():
-                        if k in self.losses.keys():
-                            self.losses[k].append(losses_dict[k].numpy() * (1 - self.ema) +
-                                                  self.losses[k][-1] * self.ema)
-                        else:
-                            self.losses[k] = [losses_dict[k].numpy()]
-
-                    gen_grads = gen_tape.gradient(
-                        gen_losses, self.pconv_unet.trainable_variables)
-                    self.optimizer.apply_gradients(
-                        zip(gen_grads, self.pconv_unet.trainable_variables))
-
-                if i % plot_interval == 0 and plot_progress:
-                    self.plot_example(x[0] * y[0], x[0],
-                                      gen_output[0], comp[0])
-
     # pconv_unet network. m - is a multiplyer for the number of channels for convolutions
     def pconv_unet(self, m=64):
         kernel = 3
