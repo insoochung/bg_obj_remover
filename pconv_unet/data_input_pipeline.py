@@ -60,8 +60,8 @@ def get_dataset(filenames, image_size=512, batch_size=4, training=False):
     dataset = load_dataset(filenames, image_size, training)
     if training:
         dataset = dataset.shuffle(2048)
+    dataset = dataset.repeat()
     dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
     dataset = dataset.batch(batch_size)
-    if training:
-        dataset = dataset.repeat()
+
     return dataset

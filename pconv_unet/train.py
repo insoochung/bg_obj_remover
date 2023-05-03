@@ -42,6 +42,7 @@ def plot_example(inp, tar, gen, comp, train_dir, epoch, step):
     ax[3].set_title('Computed')
 
     plt.savefig(f"{plot_dir}/e{epoch}_s{step}.png")
+    plt.close()
 
 
 def forward(model, target, mask):
@@ -65,14 +66,15 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
         train_losses = []
         valid_losses = []
         print(f"Epoch {e} - training")
-        for i in tqdm(range(train_steps)):
+        pbar = tqdm(range(train_steps))
+        for i in pbar:
             batch = next(train_iter)
             mask, target = get_masked(batch, mask_gen)
             with tf.GradientTape() as gen_tape:
                 gen_output, comp, gen_losses, losses_dict = forward(
                     model, target, mask)
                 train_losses.append(losses_dict["total"])
-
+                pbar.set_postfix({"loss": train_losses[-1]})
                 for k in losses_dict.keys():
                     if k in model.losses.keys():
                         model.losses[k].append(losses_dict[k].numpy() * (1 - model.ema) +
@@ -86,12 +88,14 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
                     zip(gen_grads, model.pconv_unet.trainable_variables))
 
         print(f"Epoch {e} - validation")
-        for i in tqdm(range(valid_steps)):
+        pbar = tqdm(range(valid_steps))
+        for i in pbar:
             batch = next(valid_iter)
             mask, target = get_masked(batch, mask_gen)
             gen_output, comp, gen_losses, losses_dict = forward(
                 model, target, mask)
             valid_losses.append(losses_dict["total"])
+            pbar.set_postfix({"loss": valid_losses[-1]})
             if plot_interval and i % plot_interval == 0:
                 plot_example(target[0] * mask[0], target[0],
                              gen_output[0], comp[0], train_dir, e, i)
@@ -103,7 +107,7 @@ def train(model, train_iter, valid_iter, train_dir, start_epoch=0, epochs=10, tr
 
 if __name__ == "__main__":
     image_size = 256
-    batch_size = 1
+    batch_size = 16
     assets_dir = f"{os.path.dirname(__file__)}/assets"
     model_ckpt = f"{assets_dir}/pytorch_to_keras_vgg16.h5"
     train_filepaths = glob.glob(
@@ -117,38 +121,28 @@ if __name__ == "__main__":
                            batch_size, training=True)
     valid_ds = get_dataset(valid_filepaths, image_size,
                            batch_size, training=False)
-    model = PConvUnet(model_ckpt, image_size=image_size)
+    model = PConvUnet(model_ckpt, image_size=image_size, lr=1e-2)
 
-    previous_ckpt = None
+    train_dir = f"{assets_dir}/trained_models"
     start_epoch = 0
+    previous_ckpt = tf.train.latest_checkpoint(
+        train_dir, f"{train_dir}/checkpoint")
     if previous_ckpt:
         model.load_model(previous_ckpt)
-        assert start_epoch, "If you are starting from a previous checkpoint, set start epoch"
+        start_epoch = int(previous_ckpt.split("/")[-1].split("_")[1]) + 1
+        print(f"Model weights loaded from {previous_ckpt}")
+        print(f"Start training at epoch {start_epoch}")
 
-    # For testing
+    # Full-on training
     train(
         model,
         train_iter=iter(train_ds),
         valid_iter=iter(valid_ds),
-        train_dir=f"{assets_dir}/trained_models",
+        train_dir=train_dir,
         start_epoch=start_epoch,
-        epochs=1,
-        train_steps=1,
-        valid_steps=1,
-        plot_interval=1,
+        epochs=100,
+        train_steps=10000,
+        valid_steps=100,
+        plot_interval=20,
         image_size=256
     )
-
-    # # Full-on training
-    # train(
-    #     model,
-    #     train_iter=iter(train_ds),
-    #     valid_iter=iter(valid_ds),
-    #     train_dir=f"{assets_dir}/trained_models",
-    #     start_epoch=0,
-    #     epochs=20,
-    #     train_steps=10000,
-    #     valid_steps=100,
-    #     plot_interval=20,
-    #     image_size=256
-    # )
