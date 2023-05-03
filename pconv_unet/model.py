@@ -9,7 +9,7 @@ from layers import PConv2D
 
 
 class PConvUnet():
-    def __init__(self, vgg_path, image_size=512, batch_size=4, lr=2e-4, m=64):
+    def __init__(self, vgg_path="", image_size=512, batch_size=4, lr=2e-4, m=64):
         self.image_size = image_size
         self.batch_size = batch_size
         self.lr = lr
@@ -20,8 +20,9 @@ class PConvUnet():
         self.pconv_unet = self.pconv_unet(m=m)
         self.pconv_unet.build(input_shape=(None, image_size, image_size, 3))
 
-        self.vgg = self.build_vgg(vgg_path)
-        self.vgg.build(input_shape=(None, image_size, image_size, 3))
+        self.vgg = self.build_vgg(vgg_path=vgg_path)
+        if self.vgg:
+            self.vgg.build(input_shape=(None, image_size, image_size, 3))
 
     # pconv_unet network. m - is a multiplyer for the number of channels for convolutions
     def pconv_unet(self, m=64):
@@ -81,7 +82,9 @@ class PConvUnet():
 
     # vgg is a VGG16
     # you can change this function and load weights provided by TF 2.0
-    def build_vgg(self, vgg_path):
+    def build_vgg(self, vgg_path=""):
+        if not vgg_path:
+            return None
         mean = [0.485, 0.456, 0.406]
         stdev = [0.229, 0.224, 0.225]
 

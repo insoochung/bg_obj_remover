@@ -11,7 +11,6 @@ def preprocessing_layer(img_size=512):
         layers.RandomRotation((-0.1, 0.1)),
         layers.Resizing(img_size, img_size),
         layers.Rescaling(1./255),
-
     ])
 
 
