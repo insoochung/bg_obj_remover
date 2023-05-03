@@ -1,1 +1,8 @@
 .ipynb_checkpoints
+__pycache__
+.vscode
+pconv_unet/assets/*h5
+pconv_unet/assets/data.zip
+pconv_unet/assets/kaggle
+pconv_unet/assets/trained_models
+.DS_Store
