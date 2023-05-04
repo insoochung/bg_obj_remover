@@ -4,9 +4,9 @@
 
 # Image segmentation model
 
- For image segmentation we have used the pre-trained mask RCNN model from https://github.com/open-mmlab/mmdetection.git.
- The dataset was trained on COCO dataset which can indetify and provide instance segmentations for 80 different categories of objects.
- The [instance_segmentation](https://github.com/insoochung/bg_obj_remover/blob/main/notebooks/instance_segmentation.ipynb) notebook provides the entire workflow to identify different objects and generates the masks for the selected object.
+ - For image segmentation we have used the pre-trained mask RCNN model from https://github.com/open-mmlab/mmdetection.git.
+ - The dataset was trained on COCO dataset which can indetify and provide instance segmentations for 80 different categories of objects.
+ - The [instance_segmentation](https://github.com/insoochung/bg_obj_remover/blob/main/notebooks/instance_segmentation.ipynb) notebook provides the entire workflow to identify different objects and generates the masks for the selected object.
 
 # Image in-painting model
 
